@@ -372,7 +372,10 @@ void connection(int client_socket)
 			}
 		}
 		else if(input_array[0]=="upload_password"){
-			write(client_socket,"Check",6);
+			write(client_socket,"Uploading Password Request",36);
+		}
+		else if(input_array[0]=="get_password"){
+			write(client_socket,"Got Password Request",30);
 		}
 		else if (input_array[0] == "download_file")
 		{
@@ -406,7 +409,7 @@ void connection(int client_socket)
 				write(client_socket, "Request accepted.", 18);
 				grp_members[group_id].insert(user_id);
 				grp_requests[group_id].erase(user_id);
-				
+				client_group[user_id]=group_id;
 			}
 			}
 		}
@@ -458,7 +461,6 @@ void connection(int client_socket)
 			{
 				if(client_group.find(client_id)==client_group.end())
 				{grp_requests[group_id].insert(client_id);
-				client_group[client_id]=group_id;
 				write(client_socket, "Group request successfully sent", 31);}
 				else{
 					write(client_socket, "Already present in another group", 40);

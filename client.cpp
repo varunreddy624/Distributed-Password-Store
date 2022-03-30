@@ -22,6 +22,8 @@
 #include <cppconn/resultset.h>
 #include <cppconn/statement.h>
 #include <cppconn/prepared_statement.h>
+#include <openssl/evp.h>
+#include <openssl/aes.h>
 using namespace std;
 
 #define MAX_CHUNK_SIZE 524288
@@ -415,11 +417,8 @@ int upload_password(vector<string> input_array,int sock){
 			return -1;
 		}
 	char reply_back[10240];
-	cout<<"chehchhh";
 	bzero(reply_back, 10240);
 	read(sock, reply_back, 10240);
-	cout<<"checkwrong";
-	cout<<reply_back;
 	vector<string> requests = splitString(string(reply_back), "*$*");
 		
 		for (size_t i = 0; i < requests.size() - 1; i++)
@@ -451,6 +450,71 @@ int upload_password(vector<string> input_array,int sock){
 			}
 			string x="upload";
 			string scumm=x+"*$*"+name+"*$*"+password+"*$*"+website+"*$*"+peer_ip+"*$*";
+			if (send(socket_peer, &scumm[0], strlen(&scumm[0]), MSG_NOSIGNAL) == -1)
+			{
+				printf("Error in socket peer in file_path\n");
+				return -1;
+			}
+			//cout << "Sent command to peer - " << command_xx << endl;
+			char reply_back[10240] = {0};
+			if (read(socket_peer, reply_back, 10240) < 0)
+			{
+				printf("error in socket reading in current_path\n");
+				return -1;
+			}
+			cout<<reply_back<<endl;
+			}
+		}
+	return 0;
+}
+
+
+int get_password(vector<string> input_array,int sock){
+	string domain=input_array[1];
+	string cmd="list_members";
+	string strt="";
+	if (send(sock, &cmd[0], strlen(&cmd[0]), MSG_NOSIGNAL) == -1)
+		{
+			strt="error";
+			printf("Error from server");
+			cout<<"\n";
+			return -1;
+		}
+	char reply_back[10240];
+	bzero(reply_back, 10240);
+	read(sock, reply_back, 10240);
+	vector<string> requests = splitString(string(reply_back), "*$*");
+		
+		for (size_t i = 0; i < requests.size() - 1; i++)
+		{  
+			vector<string> peeraddr = splitString(requests[i], ":");
+			if(peer_ip!=peeraddr[0]){
+			uint16_t peerPort = stoi(string(peeraddr[1]));
+			int socket_peer = 0;
+			struct sockaddr_in current_peer_serv_addr;
+
+			if ((socket_peer = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+			{
+				printf("\n Socket creation error \n");
+				return -1;
+			}
+			//cout << "Socket Created to peer" << endl;
+			current_peer_serv_addr.sin_family = AF_INET;
+			current_peer_serv_addr.sin_port = htons(peerPort);
+			if (inet_pton(AF_INET, &peeraddr[0][0], &current_peer_serv_addr.sin_addr) < 0)
+			{
+				cout<<"ERROR:";
+				perror("Peer Connection Error(INET)");
+			}
+
+			if (connect(socket_peer, (struct sockaddr *)&current_peer_serv_addr, sizeof(current_peer_serv_addr)) < 0)
+			{
+				cout<<"ERROR";
+				perror("Peer Connection Error");
+			}
+			string x="get_password";
+			cout<<peer_ip<<endl;
+			string scumm=x+"*$*"+domain+"*$*"+peer_ip+"*$*";
 			if (send(socket_peer, &scumm[0], strlen(&scumm[0]), MSG_NOSIGNAL) == -1)
 			{
 				printf("Error in socket peer in file_path\n");
@@ -898,6 +962,10 @@ int connection(vector<string> input_array, int sock)
 		cout<<reply_back<<endl;
 		return upload_password(input_array,sock);
 	}
+	else if(input_array[0]=="get_password"){
+		cout<<reply_back<<endl;
+		return get_password(input_array,sock);
+	}
 	else if (input_array[0] == "download_file")
 	{
 		if (string(reply_back) != "Downloading")
@@ -989,6 +1057,8 @@ int connection(vector<string> input_array, int sock)
 	return 0;
 }
 
+
+
 void insertIntoPasswordTable(string ip, string domain, string username, string password){
 	const string url="localhost";
 	const string user="sammy";
@@ -1026,16 +1096,27 @@ void handleconnection(int client_socket)
 
 	vector<string> input_array = splitString(string(input_client), "*$*");
 
-	insertIntoPasswordTable(input_array[4],input_array[3],input_array[1],input_array[2]);
-	cout << string(input_client) << endl;
+	
 	
 	if(input_array[0]=="upload"){
+	insertIntoPasswordTable(input_array[4],input_array[3],input_array[1],input_array[2]);
+	//cout << string(input_client) << endl;
 		int i=0;
 		while(i<input_array.size()-1){
 			cout<<input_array[i]<<endl;
 			i+=1;
 		}
 		send(client_socket, "Success", 9, 0);
+	}
+
+	if(input_array[0]=="get_password"){
+		int i=0;
+		cout<<string(input_client)<<endl;
+		while(i<input_array.size()-1){
+			cout<<input_array[i]<<endl;
+			i+=1;
+		}
+		send(client_socket,"Got Password",13,0);
 	}
 
 	if (input_array[0] == "current_chunk")
