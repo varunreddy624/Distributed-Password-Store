@@ -16,6 +16,12 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "mysql_connection.h"
+#include <cppconn/driver.h>
+#include <cppconn/exception.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
+#include <cppconn/prepared_statement.h>
 using namespace std;
 
 #define MAX_CHUNK_SIZE 524288
@@ -25,6 +31,7 @@ string FileName, tracker_ip, peer_ip;
 int check_login = 0, check_sha = 1;
 uint16_t tracker_port, peer_port;
 unordered_map<string, string> file_to_path;
+string user_table;
 
 // man
 
@@ -408,8 +415,11 @@ int upload_password(vector<string> input_array,int sock){
 			return -1;
 		}
 	char reply_back[10240];
+	cout<<"chehchhh";
 	bzero(reply_back, 10240);
 	read(sock, reply_back, 10240);
+	cout<<"checkwrong";
+	cout<<reply_back;
 	vector<string> requests = splitString(string(reply_back), "*$*");
 		
 		for (size_t i = 0; i < requests.size() - 1; i++)
@@ -417,44 +427,44 @@ int upload_password(vector<string> input_array,int sock){
 			vector<string> peeraddr = splitString(requests[i], ":");
 			if(peer_ip!=peeraddr[0]){
 			uint16_t peerPort = stoi(string(peeraddr[1]));
-	int socket_peer = 0;
-	struct sockaddr_in current_peer_serv_addr;
+			int socket_peer = 0;
+			struct sockaddr_in current_peer_serv_addr;
 
-	if ((socket_peer = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		printf("\n Socket creation error \n");
-		return -1;
-	}
-	//cout << "Socket Created to peer" << endl;
-	current_peer_serv_addr.sin_family = AF_INET;
-	current_peer_serv_addr.sin_port = htons(peerPort);
-	if (inet_pton(AF_INET, &peeraddr[0][0], &current_peer_serv_addr.sin_addr) < 0)
-	{
-		cout<<"ERROR:";
-		perror("Peer Connection Error(INET)");
-	}
+			if ((socket_peer = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+			{
+				printf("\n Socket creation error \n");
+				return -1;
+			}
+			//cout << "Socket Created to peer" << endl;
+			current_peer_serv_addr.sin_family = AF_INET;
+			current_peer_serv_addr.sin_port = htons(peerPort);
+			if (inet_pton(AF_INET, &peeraddr[0][0], &current_peer_serv_addr.sin_addr) < 0)
+			{
+				cout<<"ERROR:";
+				perror("Peer Connection Error(INET)");
+			}
 
-	if (connect(socket_peer, (struct sockaddr *)&current_peer_serv_addr, sizeof(current_peer_serv_addr)) < 0)
-	{
-		cout<<"ERROR";
-		perror("Peer Connection Error");
-	}
-	string x="upload";
-	string scumm=x+"*$*"+name+"*$*"+password+"*$*"+website+"*$*"+peer_ip+"*$*";
-	if (send(socket_peer, &scumm[0], strlen(&scumm[0]), MSG_NOSIGNAL) == -1)
-		{
-			printf("Error in socket peer in file_path\n");
-			return -1;
-		}
-		//cout << "Sent command to peer - " << command_xx << endl;
-		char reply_back[10240] = {0};
-		if (read(socket_peer, reply_back, 10240) < 0)
-		{
-			printf("error in socket reading in current_path\n");
-			return -1;
-		}
-		cout<<reply_back<<endl;
-		}
+			if (connect(socket_peer, (struct sockaddr *)&current_peer_serv_addr, sizeof(current_peer_serv_addr)) < 0)
+			{
+				cout<<"ERROR";
+				perror("Peer Connection Error");
+			}
+			string x="upload";
+			string scumm=x+"*$*"+name+"*$*"+password+"*$*"+website+"*$*"+peer_ip+"*$*";
+			if (send(socket_peer, &scumm[0], strlen(&scumm[0]), MSG_NOSIGNAL) == -1)
+			{
+				printf("Error in socket peer in file_path\n");
+				return -1;
+			}
+			//cout << "Sent command to peer - " << command_xx << endl;
+			char reply_back[10240] = {0};
+			if (read(socket_peer, reply_back, 10240) < 0)
+			{
+				printf("error in socket reading in current_path\n");
+				return -1;
+			}
+			cout<<reply_back<<endl;
+			}
 		}
 	return 0;
 }
@@ -979,6 +989,29 @@ int connection(vector<string> input_array, int sock)
 	return 0;
 }
 
+void insertIntoPasswordTable(string ip, string domain, string username, string password){
+	const string url="localhost";
+	const string user="sammy";
+	const string pass="Password@12";
+	const string database="sns";
+	sql::Driver* driver = get_driver_instance();
+	std::auto_ptr<sql::Connection> con(driver->connect(url, user, pass));
+	con->setSchema(database);
+	
+	sql::PreparedStatement *stmt;
+
+	string sqlstatement = "insert into " + user_table + " values(?,?,?,?)";
+
+	cout << sqlstatement << endl;
+
+  	stmt = con->prepareStatement(sqlstatement);
+	stmt->setString(1,ip);
+	stmt->setString(2,domain);
+	stmt->setString(3,username);
+	stmt->setString(4,password);
+	stmt->executeQuery();
+}
+
 void handleconnection(int client_socket)
 {
 	string client_uid = "";
@@ -992,11 +1025,15 @@ void handleconnection(int client_socket)
 	}
 
 	vector<string> input_array = splitString(string(input_client), "*$*");
-	//cout << string(input_client) << endl;
 
+	insertIntoPasswordTable(input_array[4],input_array[3],input_array[1],input_array[2]);
+	cout << string(input_client) << endl;
+	
 	if(input_array[0]=="upload"){
-		for(int i=1;i<input_array.size()-1;i++){
+		int i=0;
+		while(i<input_array.size()-1){
 			cout<<input_array[i]<<endl;
+			i+=1;
 		}
 		send(client_socket, "Success", 9, 0);
 	}
@@ -1142,19 +1179,21 @@ void *server_func(void *arg)
 	return NULL;
 }
 
+
 int main(int argc, char *argv[])
 {
-	if (argc != 3)
-	{
-		printf("Invalid number of arguments\n");
-		return -1;
-	}
+	// if (argc != 4)
+	// {
+	// 	printf("Invalid number of arguments\n");
+	// 	return -1;
+	// }
 
 	vector<string> pos=splitString(argv[1],":");
 	peer_ip = pos[0];
 	peer_port = stoi(pos[1]);
 	pair<int,string> p=getIPAndPortFromFileName(argv[2]);
 	tracker_ip = p.second;
+	user_table=argv[3];
 	tracker_port = p.first;//stoi(argv[4]);
 	struct sockaddr_in serv_addr;
 	int sock = 0;
@@ -1244,3 +1283,5 @@ int main(int argc, char *argv[])
 	close(sock);
 	return 0;
 }
+
+//g++ -Wall -I/usr/include/cppconn client.cpp -o client -pthread -lcrypto -L/usr/lib -lmysqlcppconn

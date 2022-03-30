@@ -406,7 +406,7 @@ void connection(int client_socket)
 				write(client_socket, "Request accepted.", 18);
 				grp_members[group_id].insert(user_id);
 				grp_requests[group_id].erase(user_id);
-				client_group[client_id]=group_id;
+				
 			}
 			}
 		}
@@ -458,6 +458,7 @@ void connection(int client_socket)
 			{
 				if(client_group.find(client_id)==client_group.end())
 				{grp_requests[group_id].insert(client_id);
+				client_group[client_id]=group_id;
 				write(client_socket, "Group request successfully sent", 31);}
 				else{
 					write(client_socket, "Already present in another group", 40);
@@ -466,6 +467,8 @@ void connection(int client_socket)
 			}
 		}
 		else if(input_array[0] == "list_members"){
+			cout << client_id << endl;
+			cout<<client_group[client_id] << endl;
 			string cur_client_group=client_group[client_id];
 			string res="";
 			for(auto itr: grp_members[cur_client_group]){
