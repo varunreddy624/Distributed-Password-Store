@@ -359,7 +359,16 @@ int get_password(vector<string> input_array,int sock){
 
 int connection(vector<string> input_array, int sock)
 {
-	char reply_back[10240];
+	if(input_array[0]=="upload_password"){
+		// cout<<reply_back<<endl;
+		return upload_password(input_array,sock);
+	}
+	else if(input_array[0]=="get_password"){
+		// cout<<reply_back<<endl;
+		return get_password(input_array,sock);
+	}
+	else
+	{char reply_back[10240];
 	bzero(reply_back, 10240);
 	read(sock, reply_back, 10240);
 	if (string(reply_back) == "Invalid Arguments")
@@ -404,15 +413,7 @@ int connection(vector<string> input_array, int sock)
 	{
 		cout << reply_back << endl;
 	}
-	else if(input_array[0]=="upload_password"){
-		// cout<<reply_back<<endl;
-		return upload_password(input_array,sock);
-	}
-	else if(input_array[0]=="get_password"){
-		// cout<<reply_back<<endl;
-		return get_password(input_array,sock);
-	}
-
+	
 	else if (input_array[0] == "list_groups")
 	{
 		string fname;
@@ -449,7 +450,7 @@ int connection(vector<string> input_array, int sock)
 	{
 		cout << reply_back << endl;
 	}
-
+	}
 	return 0;
 }
 
@@ -748,6 +749,7 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+		if(input_array[0]!="upload_password" && input_array[0]!="get_password"){
 		if (send(sock, &input[0], strlen(&input[0]), MSG_NOSIGNAL) == -1)
 		{
 			strt="error";
@@ -755,7 +757,7 @@ int main(int argc, char *argv[])
 			cout<<"\n";
 			return -1;
 		}
-
+		}
 		connection(input_array, sock);
 	}
 

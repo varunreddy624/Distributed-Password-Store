@@ -237,12 +237,6 @@ void connection(int client_socket)
 			checklogin[client_id] = false;
 			write(client_socket, "Logout Successful", 20);
 		}
-		else if(input_array[0]=="upload_password"){
-			write(client_socket,"Uploading Password Request",36);
-		}
-		else if(input_array[0]=="get_password"){
-			write(client_socket,"Got Password Request",30);
-		}
 		else if (input_array[0] == "accept_request")
 		{
 			if (input_array.size() != 3)
@@ -329,8 +323,8 @@ void connection(int client_socket)
 			}
 		}
 		else if(input_array[0] == "list_members"){
-			cout << client_id << endl;
-			cout<<client_group[client_id] << endl;
+			//cout << client_id << endl;
+			//cout<<client_group[client_id] << endl;
 			string cur_client_group=client_group[client_id];
 			string res="";
 			for(auto itr: grp_members[cur_client_group]){
