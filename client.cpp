@@ -16,6 +16,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "mysql_connection.h"
 #include <cppconn/driver.h>
 #include <cppconn/exception.h>
@@ -24,6 +26,8 @@
 #include <cppconn/prepared_statement.h>
 #include <openssl/evp.h>
 #include <openssl/aes.h>
+#include <boost/algorithm/string.hpp>
+
 using namespace std;
 
 #define MAX_CHUNK_SIZE 524288
@@ -34,9 +38,62 @@ int check_login = 0, check_sha = 1;
 uint16_t tracker_port, peer_port;
 unordered_map<string, string> file_to_path;
 string user_table;
+unsigned char *key_data;
+int key_data_len;
+unsigned int salt[] = {12345, 54321};
+EVP_CIPHER_CTX *en, *de;
 
 // man
 
+
+int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt, EVP_CIPHER_CTX *e_ctx, EVP_CIPHER_CTX *d_ctx)
+{
+  int i, nrounds = 5;
+  unsigned char key[32], iv[32];
+  
+  i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha1(), salt, key_data, key_data_len, nrounds, key, iv);
+
+  if (i != 32) {
+    printf("Key size is %d bits - should be 256 bits\n", i);
+    return -1;
+  }
+
+  EVP_CIPHER_CTX_init(e_ctx);
+  EVP_EncryptInit_ex(e_ctx, EVP_aes_256_cbc(), NULL, key, iv);
+  EVP_CIPHER_CTX_init(d_ctx);
+  EVP_DecryptInit_ex(d_ctx, EVP_aes_256_cbc(), NULL, key, iv);
+
+  return 0;
+}
+
+
+unsigned char *aes_encrypt(EVP_CIPHER_CTX *e, unsigned char *plaintext, int *len)
+{
+  int c_len = *len + AES_BLOCK_SIZE, f_len = 0;
+  unsigned char *ciphertext = (unsigned char *)malloc(c_len);
+
+  EVP_EncryptInit_ex(e, NULL, NULL, NULL, NULL);
+
+  EVP_EncryptUpdate(e, ciphertext, &c_len, plaintext, *len);
+
+  EVP_EncryptFinal_ex(e, ciphertext+c_len, &f_len);
+
+  *len = c_len + f_len;
+  return ciphertext;
+}
+
+unsigned char *aes_decrypt(EVP_CIPHER_CTX *e, unsigned char *ciphertext, int *len)
+{
+  int p_len = *len, f_len = 0;
+  unsigned char *plaintext = (unsigned char *)malloc(p_len);
+  
+  EVP_DecryptInit_ex(e, NULL, NULL, NULL, NULL);
+  EVP_DecryptUpdate(e, plaintext, &p_len, ciphertext, *len);
+  EVP_DecryptFinal_ex(e, plaintext+p_len, &f_len);
+
+  *len = p_len + f_len;
+  return plaintext;
+}
 
 
 vector<string> splitString(string stringS, string x)
@@ -49,19 +106,7 @@ vector<string> splitString(string stringS, string x)
 	{
 		temp = stringS.substr(0, position);
 		temp1 = temp1 + "a";
-		if (false && 2 == 2)
-		{
-			cout << "dummy";
-		}
-		else if (false)
-		{
-			cout << "test";
-		}
 		ans.push_back(temp);
-		if (temp1 == "GST")
-		{
-			cout << "return";
-		}
 		stringS.erase(0, position + x.length());
 	}
 
@@ -192,14 +237,6 @@ string combinehash(char *file_path)
 			custom = 0;
 			while (custom < MAX_CHUNK_SIZE && (curt = fread(poll, 1, min(SIZE - 1, MAX_CHUNK_SIZE - custom), file_pointer)))
 			{
-				if (false && 2 == 2)
-				{
-					cout << "dummy";
-				}
-				else if (false)
-				{
-					cout << "test";
-				}
 				poll[curt] = '\0';
 				custom += strlen(poll);
 
@@ -328,10 +365,6 @@ string peer_connection(char *PeerP, char *PortI, string scumm)
 		}
 		//cout << string(reply_back) << endl;
 		close(socket_peer);
-		while(false)
-		{
-			cout<<"dummy";
-		}
 		return string(reply_back);
 
 		if(0)
@@ -404,8 +437,12 @@ string peer_connection(char *PeerP, char *PortI, string scumm)
 }
 
 int upload_password(vector<string> input_array,int sock){
-	string name=input_array[1];
-	string password=input_array[2];
+	int n1 = input_array[1].length();
+	string name =  string((char *)aes_encrypt(en, (unsigned char *)(input_array[1].c_str()), &n1));
+
+	int n2 = input_array[2].length();
+	string password =  string((char *)aes_encrypt(en, (unsigned char *)(input_array[2].c_str()), &n2));
+
 	string website=input_array[3];
 	string cmd="list_members";
 	string strt="";
@@ -462,7 +499,6 @@ int upload_password(vector<string> input_array,int sock){
 				printf("error in socket reading in current_path\n");
 				return -1;
 			}
-			cout<<reply_back<<endl;
 			}
 		}
 	return 0;
@@ -527,7 +563,18 @@ int get_password(vector<string> input_array,int sock){
 				printf("error in socket reading in current_path\n");
 				return -1;
 			}
-			cout<<reply_back<<endl;
+			vector<string> blobCredentials = splitString(string(reply_back)," ");
+
+			int n1 = blobCredentials[0].length();
+     		std::string decryptedUN =  std::string((char*)aes_decrypt(de,(unsigned char*)blobCredentials[0].c_str(),&n1));
+
+			int n2 = blobCredentials[1].length();
+     		std::string decryptedPWD =  std::string((char*)aes_decrypt(de,(unsigned char*)blobCredentials[1].c_str(),&n2));
+
+			boost::algorithm::trim(decryptedUN);
+			boost::algorithm::trim(decryptedPWD);
+
+			cout << decryptedUN << " " << decryptedPWD;
 			}
 		}
 	return 0;
@@ -959,11 +1006,11 @@ int connection(vector<string> input_array, int sock)
 		return upload_file(input_array, sock);
 	}
 	else if(input_array[0]=="upload_password"){
-		cout<<reply_back<<endl;
+		// cout<<reply_back<<endl;
 		return upload_password(input_array,sock);
 	}
 	else if(input_array[0]=="get_password"){
-		cout<<reply_back<<endl;
+		// cout<<reply_back<<endl;
 		return get_password(input_array,sock);
 	}
 	else if (input_array[0] == "download_file")
@@ -1075,8 +1122,13 @@ void insertIntoPasswordTable(string ip, string domain, string username, string p
   	stmt = con->prepareStatement(sqlstatement);
 	stmt->setString(1,ip);
 	stmt->setString(2,domain);
-	stmt->setString(3,username);
-	stmt->setString(4,password);
+
+	stringstream ss1 = stringstream(username);
+	stmt->setBlob(3,&ss1);
+
+	stringstream ss2 = stringstream(password);
+	stmt->setBlob(4,&ss2);
+
 	stmt->executeQuery();
 }
 
@@ -1102,9 +1154,18 @@ string getCredentialsFromIPAndDomain(string ip, string domain){
 
 	string credentials="";
  	if(res->next()) {
-    	credentials+=res->getString(1);
+
+		std::istream *blobData1 = res->getBlob(1);
+		std::istreambuf_iterator<char> isb1 = std::istreambuf_iterator<char>(*blobData1);
+		std::string blobString1 = std::string(isb1, std::istreambuf_iterator<char>());
+
+		std::istream *blobData2 = res->getBlob(2);
+		std::istreambuf_iterator<char> isb2 = std::istreambuf_iterator<char>(*blobData2);
+		std::string blobString2 = std::string(isb2, std::istreambuf_iterator<char>());
+
+    	credentials+=blobString1;
 		credentials+=" ";
-    	credentials+=res->getString(2);
+    	credentials+=blobString2;
   	}
 	return credentials;
 }
@@ -1128,11 +1189,11 @@ void handleconnection(int client_socket)
 	if(input_array[0]=="upload"){
 	insertIntoPasswordTable(input_array[4],input_array[3],input_array[1],input_array[2]);
 	//cout << string(input_client) << endl;
-		int i=0;
-		while(i<input_array.size()-1){
-			cout<<input_array[i]<<endl;
-			i+=1;
-		}
+		// int i=0;
+		// while(i<input_array.size()-1){
+		// 	cout<<input_array[i]<<endl;
+		// 	i+=1;
+		// }
 		send(client_socket, "Success", 9, 0);
 	}
 
@@ -1297,6 +1358,18 @@ int main(int argc, char *argv[])
 	// 	return -1;
 	// }
 
+	key_data = (unsigned char *)argv[4];
+  	key_data_len = strlen(argv[4]);
+	en = EVP_CIPHER_CTX_new();
+	de = EVP_CIPHER_CTX_new();
+
+	if (aes_init(key_data, key_data_len, (unsigned char *)&salt, en, de)) {
+		printf("Couldn't initialize AES cipher\n");
+		return -1;
+  	}
+
+	
+
 	vector<string> pos=splitString(argv[1],":");
 	peer_ip = pos[0];
 	peer_port = stoi(pos[1]);
@@ -1394,3 +1467,5 @@ int main(int argc, char *argv[])
 }
 
 //g++ -Wall -I/usr/include/cppconn client.cpp -o client -pthread -lcrypto -L/usr/lib -lmysqlcppconn
+
+// ALTER TABLE user1pwds MODIFY COLUMN username VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL;
