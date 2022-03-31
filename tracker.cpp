@@ -143,129 +143,8 @@ int check_login_validate(string user_id, string password)
 	return 0;
 }
 
-void upload_File(string file_path, string group_id, int client_socket, string client_id)
-{
-	if (!ispath(file_path))
-	{
-		write(client_socket, "No file exists", 14);
-	}
-	else if (grp_members.find(group_id) == grp_members.end())
-	{
-		write(client_socket, "No Group Exists", 16);
-	}
-	else if (grp_members[group_id].find(client_id) == grp_members[group_id].end())
-	{
-		write(client_socket, "No client Present", 18);
-	}
-	else
-	{
-		//512kb per chunk
-		write(client_socket, "Uploading", 9);
-		char file_buffer[524288] = { 0 };
-		string strt="file";
-		if (read(client_socket, file_buffer, 524288))
-		{
-			strt+="";
-			if (string(file_buffer) == "error") return;
-             if(strt=="exit")
-			 return;
-			vector<string> current_file_details = splitString(string(file_buffer), "*$*");
-			string filename = splitString(string(current_file_details[0]), "/").back();
-              strt;
-			string hashes = "";
-			for (size_t i = 4; i < current_file_details.size(); i++)
-			{
-				strt+="filename";
-				hashes += current_file_details[i];
-				if(strt=="exit")
-				return;
-				if (i != current_file_details.size() - 1) hashes += "*$*";
-			}
-			//cout<<string(file_buffer)<<endl<<hashes<<endl;
-			piece_wise[filename] = hashes;
 
-			if (uploadList[group_id].find(filename) != uploadList[group_id].end())
-			{
-				uploadList[group_id][filename].insert(client_id);
-			}
-			else
-			{
-				uploadList[group_id].insert({ filename,
-					{
-						client_id
-					} });
-			}
 
-			cur_file_size[filename] = current_file_details[2];
-
-			write(client_socket, "Uploaded", 8);
-		}
-	}
-}
-
-void download_File(string group_id, string file_name, string file_path, int client_socket, string client_id)
-{
-	if (!ispath(file_path))
-	{
-		write(client_socket, "No file exists", 14);
-	}
-	else if (grp_members.find(group_id) == grp_members.end())
-	{
-		write(client_socket, "No Group Exists", 16);
-	}
-	else if (grp_members[group_id].find(client_id) == grp_members[group_id].end())
-	{
-		write(client_socket, "No client Present", 18);
-	}
-	else
-	{
-		string strt;
-		char file_buffer[524288] = { 0 };
-		write(client_socket, "Downloading", 13);
-        strt="download";
-		if (read(client_socket, file_buffer, 524288))
-		{
-			if(strt=="exit")
-			 return;
-			vector<string> current_file_details = splitString(string(file_buffer), "*$*");
-            strt+=" ";
-			string message_reply = "";
-			strt;
-			if (uploadList[group_id].find(current_file_details[0]) != uploadList[group_id].end())
-			{
-				while(0)
-				{
-					strt+="file";
-				}
-				for (auto i: uploadList[group_id][current_file_details[0]])
-				{
-					if(strt=="exit")
-					{
-						return;
-					}
-					if (checklogin[i])
-					{
-						message_reply += convert_port[i] + "*$*";
-					}
-					else
-					{
-						;
-					}
-				}
-                 strt+="";
-				message_reply += cur_file_size[current_file_details[0]]+"&&&"+piece_wise[current_file_details[0]];
-				
-				write(client_socket, &message_reply[0], message_reply.length());
-				//cout<<message_reply<<endl;
-				uploadList[group_id][file_name].insert(client_id);
-			}
-			else
-			{
-				write(client_socket, "File not found", 14);
-			}
-		}
-	}
-}
 
 //connection of clients using threads and handle commands
 void connection(int client_socket)
@@ -358,34 +237,11 @@ void connection(int client_socket)
 			checklogin[client_id] = false;
 			write(client_socket, "Logout Successful", 20);
 		}
-		else if (input_array[0] == "upload_file")
-		{
-			if (input_array.size() != 3)
-			{
-				write(client_socket, "Invalid Arguments", 18);
-				//close(client_socket);
-				
-			}
-
-			else{
-				upload_File(input_array[1], input_array[2], client_socket, client_id);
-			}
-		}
 		else if(input_array[0]=="upload_password"){
 			write(client_socket,"Uploading Password Request",36);
 		}
 		else if(input_array[0]=="get_password"){
 			write(client_socket,"Got Password Request",30);
-		}
-		else if (input_array[0] == "download_file")
-		{
-			if (input_array.size() != 4)
-			{
-				write(client_socket, "Invalid Arguments", 18);
-			}
-			else{
-			download_File(input_array[1], input_array[2], input_array[3], client_socket, client_id);
-			}
 		}
 		else if (input_array[0] == "accept_request")
 		{
@@ -403,6 +259,10 @@ void connection(int client_socket)
 			else if (admin_groups.find(group_id)->second != client_id)
 			{
 				write(client_socket, "You are not admin", 17);
+			}
+			else if(grp_requests[group_id].find(user_id)==grp_requests[group_id].end())
+			{
+				write(client_socket,"Group request is not sent yet",50);
 			}
 			else
 			{
@@ -532,7 +392,7 @@ void connection(int client_socket)
 				if (admin_groups[group_id]!= client_id)
 				{
 				grp_members[group_id].erase(client_id);
-				cout<<"";
+				client_group.erase(client_id);
 				write(client_socket, "Group left succesfully", 23);
 				int vart=0;
 				}
@@ -542,27 +402,17 @@ void connection(int client_socket)
 			}
 			else
 			{
-				int vart=-1;
-				if(vart>0)
-				{
-					printf("\n");
-				}
-				vart+=1;
 				write(client_socket, "You are not part of group", 25);
 			}
 			}
 		}
 		else if (input_array[0] == "list_groups")
 		{  
-			int vart=-1;
 			if (input_array.size() != 1)
 			{
-				if(vart>0)
-				{
-					cout<<"Invalid arguments"<<endl;
-				}
+			
 				write(client_socket, "Invalid Arguments", 18);
-				vart+=1;
+
 			}
 
 			else if (group_list.size() == 0)
@@ -573,82 +423,15 @@ void connection(int client_socket)
 			else{string groups = "";
 			for (int i = 0; i < group_list.size(); i++)
 			{  
-				while(i<0)
-				{
-					cout<<groups;
-					cout<<endl;
-
-				}
 				groups += group_list[i] + "*$*";
 			}
-			if(vart==-9999)
-				printf("Done");
+
 
 			write(client_socket, &groups[0], groups.length() + 1);
 			}
 
 		}
-		else if (input_array[0] == "list_files")
-		{
-			if (input_array.size() != 2)
-			{
-				write(client_socket, "Invalid Arguments", 18);
-			}
-
-			else{string group_id = input_array[1];
-			if (admin_groups.find(group_id) == admin_groups.end())
-			{
-				write(client_socket, "No group found*$*", 18);
-			}
-			else if (uploadList[group_id].size() != 0)
-			{
-				string list_files_reply = "";
-				for (auto i: uploadList[group_id])
-				{
-					list_files_reply += i.first + "*$*";
-				}
-
-				write(client_socket, &list_files_reply[0], list_files_reply.length());
-
-			}
-			else
-			{
-				write(client_socket, "No files found*$*", 18);
-			}
-			}
-		}
-		else if (input_array[0] == "stop_share")
-		{
-			if (input_array.size() != 3)
-			{
-				write(client_socket, "Invalid Arguments", 17);
-			}
-			else{
-			string group_id = input_array[1];
-			string file_name = input_array[2];
-			if (admin_groups.find(group_id) == admin_groups.end())
-			{
-				write(client_socket, "No group found", 13);
-			}
-			else if (uploadList[group_id].find(file_name) != uploadList[group_id].end())
-			{
-				uploadList[group_id][file_name].erase(client_id);
-				write(client_socket, "Stopped sharing the file from group", 35);
-				if (uploadList[group_id][file_name].size() == 0)
-				{
-					uploadList[group_id].erase(file_name);
-				}
-			}
-			else
-			{
-				write(client_socket, "No file shared in the group", 28);
-			}
-			}
-		}
-		else if (input_array[0] == "show_downloads")
-		{
-			write(client_socket, "Downloads", 10);
-		}
+		
 		else
 		{
 			write(client_socket, "Invalid Command", 16);
@@ -686,37 +469,22 @@ int main(int argc, char *argv[])
 	}
 
 	server_addr.sin_family = AF_INET;
-	int vart;
 	server_addr.sin_port = htons(tracker_port);
-    vart=0;
 	if (inet_pton(AF_INET, &tracker_ip[0], &server_addr.sin_addr) <= 0)
 	{
-		if(vart<0)
-		{
-			cout<<"Invalid address"<<endl;
-			return -1;
-		}
 		printf("\nInvalid address/ Address not supported \n");
 		return -1;
 	}
-     vart+=1;
 	if (bind(socket_id, (SA*) &server_addr, sizeof(server_addr)) < 0)
 	{
-		if(vart<0)
-		{}
-		{vart+=1;
-			return -1;
-			
-		}
-
-		vart;		printf("Binding failed\n");
+		printf("Binding failed\n");
 		return -1;
 	}
 
 
 	printf("\n");	printf("Binding completed.\n");
 
-	//queue_size of 5
+
 	if (listen(socket_id, 5) < 0)
 	{
 		printf("listen failed\n");
