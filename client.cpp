@@ -513,7 +513,7 @@ int get_password(vector<string> input_array,int sock){
 				perror("Peer Connection Error");
 			}
 			string x="get_password";
-			cout<<peer_ip<<endl;
+			//cout<<peer_ip<<endl;
 			string scumm=x+"*$*"+domain+"*$*"+peer_ip+"*$*";
 			if (send(socket_peer, &scumm[0], strlen(&scumm[0]), MSG_NOSIGNAL) == -1)
 			{
@@ -1072,14 +1072,41 @@ void insertIntoPasswordTable(string ip, string domain, string username, string p
 
 	string sqlstatement = "insert into " + user_table + " values(?,?,?,?)";
 
-	cout << sqlstatement << endl;
-
   	stmt = con->prepareStatement(sqlstatement);
 	stmt->setString(1,ip);
 	stmt->setString(2,domain);
 	stmt->setString(3,username);
 	stmt->setString(4,password);
 	stmt->executeQuery();
+}
+
+string getCredentialsFromIPAndDomain(string ip, string domain){
+	const string url="localhost";
+	const string user="sammy";
+	const string pass="Password@12";
+	const string database="sns";
+	sql::Driver* driver = get_driver_instance();
+	std::auto_ptr<sql::Connection> con(driver->connect(url, user, pass));
+	con->setSchema(database);
+	
+	sql::PreparedStatement *stmt;
+  	sql::ResultSet *res;
+
+	string sqlstatement = "select username, password from " + user_table + " where clientip = ? and domain_name = ?";
+
+
+	stmt = con->prepareStatement(sqlstatement);
+	stmt->setString(1,ip);
+	stmt->setString(2,domain);
+	res = stmt->executeQuery();
+
+	string credentials="";
+ 	if(res->next()) {
+    	credentials+=res->getString(1);
+		credentials+=" ";
+    	credentials+=res->getString(2);
+  	}
+	return credentials;
 }
 
 void handleconnection(int client_socket)
@@ -1111,12 +1138,13 @@ void handleconnection(int client_socket)
 
 	if(input_array[0]=="get_password"){
 		int i=0;
-		cout<<string(input_client)<<endl;
-		while(i<input_array.size()-1){
-			cout<<input_array[i]<<endl;
-			i+=1;
-		}
-		send(client_socket,"Got Password",13,0);
+		
+		string domain = input_array[1];
+		string ip = input_array[2];
+
+		string credentials = getCredentialsFromIPAndDomain(ip,domain);
+		
+		send(client_socket,credentials.c_str(),credentials.length(),0);
 	}
 
 	if (input_array[0] == "current_chunk")
